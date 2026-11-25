@@ -1,0 +1,264 @@
+\documentclass{article}
+
+\usepackage[preprint]{neurips_2026}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{nicefrac}
+\usepackage{microtype}
+\usepackage{xcolor}
+
+\title{Measurement-Theoretic Active Elicitation for Predicting AI
+Evaluation Outcomes}
+
+\author{%
+  Dinesh Katupputhur Ramprasath \\
+  Stanford University \\
+  \texttt{din1993@stanford.edu} \\
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Predicting whether an AI system answers a benchmark item correctly, under a
+strict budget on how many ground-truth labels may be purchased, is a
+measurement problem in disguise: the correctness probability is a
+Rasch/IRT interaction between a subject's latent \emph{ability} and an item's
+\emph{difficulty}, and the choice of which labels to buy is exactly the
+efficient, Fisher-information-guided elicitation problem of adaptive testing.
+We propose to recast the NeurIPS~2026 Predictive AI Evaluation Competition in
+this measurement-theoretic frame. Our contribution is twofold: (i) a Bayesian
+IRT predictor whose posterior over subject ability is updated as labels arrive,
+yielding calibrated uncertainty where our current black-box tabular predictor
+has none; and (ii) a Fisher-information / expected-Brier-reduction acquisition
+policy that replaces an ad-hoc uncertainty heuristic and directly targets the
+competition's area-under-the-learning-curve metric. We will evaluate against our
+own 18 leaderboard submissions (best Brier~ALC $=0.162$) using an offline replay
+harness and live leaderboard checks.
+\end{abstract}
+
+\section{Overview and Motivation}
+
+\paragraph{The task.} The NeurIPS~2026 Predictive AI Evaluation Competition asks
+a predictor to output $P(\text{subject answers item correctly})$ for
+\mbox{(subject, item)} pairs, where a \emph{subject} is an AI system under fixed
+evaluation settings and an \emph{item} is a benchmark task. The competition is a
+\emph{streaming test-time adaptation} problem: for each subject--benchmark pair
+the predictor may purchase ground-truth labels under a nested budget schedule
+$\{0,1,3,7,15,31\}$, and is scored by \textbf{Brier~ALC} --- the (weighted) area
+under the Brier learning curve across those six budgets, with weights
+$(0.1,0.2,0.2,0.2,0.2,0.1)$. Lower is better; a constant $0.5$ predictor scores
+$0.25$.
+
+\paragraph{Two coupled preference-learning problems.} In the language of
+CS329H, the task decomposes into (1) \emph{estimation}: predicting a latent
+``will this subject get this item right,'' which is a factor model /
+Rasch interaction $\sigma(\theta_s - \beta_i)$ between subject ability $\theta_s$
+and item difficulty $\beta_i$ (Lectures~4--6); and (2) \emph{elicitation}:
+choosing which labels to buy under a budget to drive down Brier fastest, which
+is efficient Fisher-information-guided elicitation / adaptive testing
+(Lecture~7).
+
+\paragraph{The gap in our prior submissions.} Our team has submitted 18 versions
+to this competition, with a current best Brier~ALC of $0.162$ (a tabular
+in-context model with text embeddings). Two structural weaknesses remain, both
+squarely in the scope of this course:
+\begin{itemize}
+  \item \textbf{The predictor is a black box.} We fit an in-context tabular
+  model on the acquired labels and blend toward a hand-coded prior with a linear
+  trust weight $\min(n/10, 1)$. There is no latent-trait model and no posterior
+  over ability, so we cannot reason about \emph{how much} a label will help
+  before buying it.
+  \item \textbf{Acquisition is a one-line heuristic.} Our acquisition rule buys a
+  label whenever $|\hat p - 0.5| \le 0.20$. This is a crude proxy for item
+  informativeness; it ignores how much a label transfers to the frozen
+  evaluation pool and ignores the budget schedule --- yet acquisition is what
+  the ALC metric rewards most.
+\end{itemize}
+
+\paragraph{Research questions.}
+\textbf{(RQ1, predictor)} Does a Bayesian IRT predictor with a posterior over
+ability updated as labels arrive match or beat the black-box tabular predictor
+on Brier, while providing calibrated uncertainty?
+\textbf{(RQ2, elicitation)} Does a Fisher-information / expected-Brier-reduction
+acquisition policy beat the $|\hat p - 0.5|$ heuristic at equal budgets, as
+measured by Brier~ALC?
+\textbf{(RQ3, cold start)} How well can the budget-0 prior be predicted from
+subject/item features alone, and how much of the ALC gain comes from a better
+prior versus better acquisition?
+
+\paragraph{Why this matters.} Predicting evaluation outcomes under a label budget
+is the core problem of \emph{efficient AI evaluation}: running fewer, better-chosen
+evaluations to rank systems reliably \citep{truong2025amortized}. Framing it with
+measurement theory yields an acquisition policy that is interpretable and
+budget-aware rather than a heuristic, and connects a practical competition to the
+psychometric foundations of the course. This is a well-scoped extension of
+existing author infrastructure for a solo project.
+
+\section{Connection to Course Topics}
+
+The project uses factor and reward models (Lecture~4) to frame correctness as an
+ability$\times$difficulty interaction; maximum-likelihood parameter learning from
+binary outcomes (Lecture~5); Bayesian estimation with a Gaussian prior on ability
+(Lecture~6), whose MAP shrinkage at low budgets is a principled replacement for
+our ad-hoc trust blend; and, centrally, efficient preference
+elicitation (Lecture~7): the result that the most informative item for estimating
+ability is the one on which the subject has a $\approx\!50/50$ chance
+(Fisher information $p(1-p)$ is maximized at $p=0.5$) is exactly what our
+uncertainty heuristic approximates. We replace it with the principled quantity and
+extend it from ``information about this item'' to ``expected Brier reduction over
+all unlabeled evaluation items for this subject.''
+
+\section{Literature Review}
+
+\paragraph{Item response theory and adaptive testing.} IRT models a binary
+response as $\sigma(\theta - \beta)$ and underlies computerized adaptive testing,
+where items are chosen to maximize Fisher information at the current ability
+estimate \citep{lord1980, embretson2000}. \citet{martinezplumed2019} brought IRT
+to machine learning, estimating latent classifier ability and instance difficulty
+and showing that accuracy conflates the two; \citet{zhou2026} applied IRT to LLM
+benchmarks and found that hard-instance performance is more predictive of real
+capability than aggregate accuracy. These establish the estimation half of our
+task but do not address \emph{budgeted} label acquisition.
+
+\paragraph{Efficient evaluation and active learning.}
+\citet{truong2025amortized} predict evaluation outcomes to avoid running full
+benchmarks, motivating the competition itself. Closest to the \emph{elicitation}
+half of our task, \citet{polo2024tinybenchmarks} and \citet{vivek2024anchor} use
+IRT and representativeness to pick a small, \emph{fixed} anchor subset that
+estimates benchmark accuracy from far fewer items; our setting differs in that the
+subset is chosen \emph{adaptively per subject} under a nested budget and scored
+online by Brier~ALC rather than fixed offline. Active learning
+\citep{settles2009} supplies the acquisition design space --- uncertainty
+sampling (which our heuristic approximates) versus expected-error-reduction, the
+principled policy we adopt and specialize to the Brier~ALC objective.
+
+\paragraph{Tabular foundation models.} Our predictor backbone is an in-context
+tabular transformer \citep{hollmann2023tabpfn, ye2025tabicl}, which gives strong
+low-shot prediction but no latent-trait structure or calibrated posterior.
+
+\paragraph{Gap.} Competition entries, ours included, treat the predictor as a
+black box and acquisition as an uncertainty heuristic. No entry models the task as
+IRT with a Bayesian posterior over ability, and none uses a Fisher-information /
+expected-Brier-reduction acquisition policy tuned to the nested budget schedule.
+That is this project's contribution.
+
+\section{Proposed Methods and Analysis}
+
+\paragraph{Predictor: Bayesian IRT with a learned prior.} We model
+$P(\text{correct} \mid s, i) = \sigma(\theta_s - \beta_i)$, optionally the 2PL
+form $\sigma(\alpha_i(\theta_s - \beta_i))$. At budget~0 we regress $\beta_i$ and
+an ability prior from features (our existing scalar features plus text embeddings
+of item content: provider tier, reasoning effort, recency), replacing the
+hand-coded prior. At budget~$\ge 1$ we treat $\theta_s$ as unknown with a Gaussian
+prior $\theta_s \sim \mathcal{N}(\mu,\sigma^2)$ and a Bernoulli-logit likelihood
+over acquired labels, and compute a MAP / Laplace posterior per call. We estimate
+$\theta_s$ \emph{per (subject, benchmark) pair} --- the unit of analysis
+throughout --- not globally, so the 31-label cap buys information about one pair's
+ability at a time. The posterior mean gives the prediction and the posterior
+variance gives the
+uncertainty that drives acquisition --- a principled replacement for the
+$\min(n/10,1)$ blend. We retain the tabular model as an ensemble/residual member
+and compare IRT-only, tabular-only, and blended variants.
+
+\paragraph{Acquisition: Fisher-optimal and budget-aware.} We compare three
+policies: (a) the current $|\hat p - 0.5|\le 0.20$ heuristic; (b) a
+\emph{Fisher} policy that acquires the candidate maximizing $I(i)=p_i(1-p_i)$
+under the current posterior, with an adaptive threshold calibrated to
+\texttt{labels\_remaining}/\texttt{items\_remaining}; and (c) a novel
+\emph{expected-Brier-reduction} policy that buys the label maximizing the expected
+reduction in Brier over the frozen evaluation pool of the same subject--benchmark
+pair. Because evaluation items share $\theta_s$, a label that sharpens the
+$\theta_s$ posterior improves every evaluation prediction, directly targeting ALC
+rather than single-item uncertainty. Because $\beta_i$ is itself regressed with
+error at budget~0, the Fisher term $I(i)=p_i(1-p_i)$ treats $\beta_i$ as known ---
+a standard CAT approximation we note and could later correct with a plug-in
+difficulty variance. All policies respect the nested-prefix
+schedule and the cap of 31 labels per pair.
+
+\paragraph{Evaluation.} We build an offline replay harness from the sample data
+and our assembled 24k-row offline pool: hold out each pair's evaluation pool,
+replay the acquisition stream, and compute Brier at each budget and the weighted
+ALC, so we can iterate without waiting on the leaderboard. To prevent leakage, the
+budget-0 difficulty and prior regression is fit only on pairs disjoint from the
+held-out evaluation pools it is later scored on. \textbf{Metrics:}
+Brier at each budget; Brier~ALC (primary); expected calibration error (ECE); label
+efficiency (ALC vs.\ labels used); and an ablation separating prior quality from
+acquisition quality (RQ3). We also report IRT goodness-of-fit (infit/outfit item
+statistics and a one- vs.\ multi-dimensional comparison) to test whether a single
+$\theta_s$ per pair is adequate, since the pool-level acquisition argument relies
+on it; and we report bootstrap 95\% confidence intervals for ALC over held-out
+pairs, so that any improvement over v7 is tested for significance rather than read
+off a single scalar. We validate the best offline configuration on the live
+leaderboard against our v7 baseline ($0.162$).
+
+\paragraph{Baselines.} Our prior submissions: v1 (tabular, $0.228$), v3 (tabular
+$+$ prior $+$ heuristic acquisition, $0.230$), and v7 (tabular $+$ embeddings,
+$\mathbf{0.162}$, current best). Success means beating v7's ALC with the IRT $+$
+Fisher-acquisition stack, or matching it with a far more interpretable, calibrated
+model.
+
+\paragraph{Expected results.} Because the current heuristic (buying when
+$|\hat p - 0.5|\le 0.20$, i.e.\ $p\in[0.3,0.7]$) is already a thresholded
+Fisher-information rule, we expect policy~(b) to track it closely; the pool-level
+expected-Brier-reduction policy~(c) is the genuine source of any gain. We expect
+(1) the Fisher / expected-Brier-reduction policies to beat the uncertainty
+heuristic most at small budgets (1, 3), where item choice matters and where ALC
+weight concentrates; (2) the Bayesian posterior to improve low-budget calibration
+(ECE) over the linear trust blend; and (3) the ablation to show acquisition
+dominating gains at budgets 1--7 and the prior dominating at budget~0.
+In keeping with a pre-analysis plan, we commit in advance to the following null
+interpretations: if policy~(b) does not beat heuristic~(a) at any budget, we will
+conclude that single-item information is already captured by the heuristic and
+attribute any ALC gain to the pool-level policy~(c) and the calibrated prior; and
+if the Bayesian posterior does not reduce ECE, we will report the measurement
+framing as a negative calibration result rather than select metrics post hoc. We
+state plainly that the scientific contribution is the acquisition policy and the
+calibration analysis even if the IRT stack only ties v7 on raw ALC.
+
+\section{Timeline, Responsibilities, and Risks}
+
+\begin{table}[h]
+  \centering
+  \caption{Week-by-week plan (Pre-Analysis Plan due Nov~4; final manuscript and
+  code due Dec~3).}
+  \label{tab:timeline}
+  \begin{tabular}{lll}
+    \toprule
+    Week & Dates & Milestone \\
+    \midrule
+    1 & Nov 5--9   & Offline replay harness reproducing leaderboard ALC; validate vs.\ v7 \\
+    2 & Nov 10--16 & Bayesian IRT predictor (MAP/Laplace posterior); compare vs.\ tabular \\
+    3 & Nov 17--23 & Fisher and expected-Brier-reduction policies; ablation vs.\ heuristic \\
+    4 & Nov 24--30 & Cold-start prior regression (RQ3); leaderboard submission; begin writeup \\
+    5 & Dec 1--3   & Final manuscript, figures, code cleanup; submit Dec~3 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\textbf{Responsibilities.} As a solo project, I will build the predictor (IRT
+posterior, feature/prior regression), the acquisition policies, and the offline
+replay harness, and run the leaderboard submissions.
+
+\textbf{Risks and mitigation.} (i)~\emph{Offline replay may not match the
+leaderboard} --- calibrate against v7's known score before trusting offline
+numbers and keep at least one leaderboard check per policy. (ii)~\emph{IRT may
+underperform the tabular model on raw Brier} --- use IRT for the posterior/uncertainty
+that drives acquisition while keeping the tabular model as the point predictor.
+(iii)~\emph{Expected-Brier-reduction may be too slow for the 8-hour runtime} ---
+use a closed-form Laplace approximation and fall back to Fisher $p(1-p)$.
+(iv)~\emph{Originality} --- the measurement-theoretic predictor and acquisition
+policy are the novel contribution; competition infrastructure is cited as the
+author's own prior work, and scope will be confirmed with course staff.
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}

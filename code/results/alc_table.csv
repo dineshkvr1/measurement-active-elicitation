@@ -1,0 +1,13 @@
+dataset,policy,alc_mean,alc_lo,alc_hi
+synthetic_easy,random,0.2089,0.2001,0.2180
+synthetic_easy,uncertainty,0.2079,0.1984,0.2171
+synthetic_easy,fisher,0.2077,0.1988,0.2170
+synthetic_easy,expected_brier,0.2061,0.1962,0.2160
+synthetic_hetero,random,0.1241,0.1157,0.1329
+synthetic_hetero,uncertainty,0.1219,0.1140,0.1300
+synthetic_hetero,fisher,0.1219,0.1141,0.1300
+synthetic_hetero,expected_brier,0.1228,0.1148,0.1310
+offline,random,0.1034,0.0835,0.1240
+offline,uncertainty,0.1022,0.0826,0.1228
+offline,fisher,0.1022,0.0826,0.1228
+offline,expected_brier,0.1032,0.0826,0.1247
