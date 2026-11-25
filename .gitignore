@@ -19,3 +19,7 @@ venv/
 
 # Packaged submission
 code_submission.zip
+
+# Write-up kept out of the public code repo
+manuscript/
+pre_analysis_plan/

@@ -34,8 +34,6 @@ code/                 experiment code (see code/README.md for setup + reproduce)
   src/                irt.py, acquisition.py, replay.py, data.py
   run_experiments.py  runs everything, writes results/ figures + tables
   make_explainer.py   regenerates the overview figure
-manuscript/           NeurIPS-format report (main.tex, main.pdf, references.bib)
-pre_analysis_plan/    the approved pre-analysis plan (main.tex, main.pdf)
 ```
 
 ## Quickstart
